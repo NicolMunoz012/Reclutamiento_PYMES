@@ -18,10 +18,10 @@ class Settings(BaseSettings):
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
     
-    # Anthropic Claude API
-    # TODO: Configurar Claude API key
-    # Ve a https://console.anthropic.com
-    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # Groq API (LLaMA 3.1)
+    # TODO: Configurar Groq API key
+    # Ve a https://console.groq.com
+    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     
     # Email
     smtp_host: str = os.getenv("SMTP_HOST", "smtp.gmail.com")

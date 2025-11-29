@@ -1,18 +1,20 @@
 """
-AI Service - Integration with Anthropic Claude API using LangChain
+AI Service - Integration with Groq API (LLaMA 3.1) using LangChain
 """
 import json
 import os
 from typing import List, Dict
-from langchain_anthropic import ChatAnthropic
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
+from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
 from config import settings
 
+print("--- DEBUG GROQ KEY START ---")
+print(f"GROQ_API_KEY value: {os.getenv('GROQ_API_KEY')}")
+print("--- DEBUG GROQ KEY END ---")
 
 class IAService:
     """
-    Service for AI operations using Claude API through LangChain.
+    Service for AI operations using Groq API (LLaMA 3.1) through LangChain.
     
     This service handles all AI-powered features:
     - Question generation for job postings
@@ -23,17 +25,18 @@ class IAService:
     """
     
     def __init__(self):
-        """Initialize LangChain Claude client with configuration"""
-        if not settings.anthropic_api_key:
+        """Initialize LangChain Groq client with configuration"""
+        if not settings.groq_api_key:
             raise ValueError(
-                "Anthropic API key not configured. "
-                "Please set ANTHROPIC_API_KEY in .env file"
+                "Groq API key not configured. "
+                "Please set GROQ_API_KEY in .env file"
             )
         
-        # Configure Claude with LangChain
-        self.llm = ChatAnthropic(
-            model="claude-sonnet-4-20250514",
-            anthropic_api_key=settings.anthropic_api_key,
+        # Configure Groq with LangChain
+        # Modelo: llama-3.1-8b-instant (rápido y eficiente)
+        self.llm = ChatGroq(
+            model="llama-3.1-8b-instant",
+            groq_api_key=settings.groq_api_key,
             max_tokens=2000,
             temperature=0.7
         )

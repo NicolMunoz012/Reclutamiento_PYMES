@@ -3,10 +3,10 @@ Chatbot Service - Conversational AI for candidate interviews using LangChain
 """
 import os
 from typing import List, Dict
-from langchain_anthropic import ChatAnthropic
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_groq import ChatGroq
+from langchain_community.memory import ConversationBufferMemory
+from langchain_community.chains import ConversationChain
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from config import settings
 
 
@@ -25,17 +25,18 @@ class ChatbotService:
     """
     
     def __init__(self):
-        """Initialize LangChain Claude client for chatbot conversations"""
-        if not settings.anthropic_api_key:
+        """Initialize LangChain Groq client for chatbot conversations"""
+        if not settings.groq_api_key:
             raise ValueError(
-                "Anthropic API key not configured. "
-                "Please set ANTHROPIC_API_KEY in .env file"
+                "Groq API key not configured. "
+                "Please set GROQ_API_KEY in .env file"
             )
         
-        # Configure Claude with LangChain for conversational AI
-        self.llm = ChatAnthropic(
-            model="claude-sonnet-4-20250514",
-            anthropic_api_key=settings.anthropic_api_key,
+        # Configure Groq with LangChain for conversational AI
+        # Modelo: llama-3.1-8b-instant (rápido y conversacional)
+        self.llm = ChatGroq(
+            model="llama-3.1-8b-instant",
+            groq_api_key=settings.groq_api_key,
             max_tokens=500,  # Shorter responses for chatbot
             temperature=0.8  # More creativity for natural conversation
         )

@@ -1,0 +1,252 @@
+"""
+Test script para verificar que Groq funciona correctamente
+"""
+import asyncio
+import os
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langchain_core.prompts import ChatPromptTemplate
+
+load_dotenv()
+
+async def test_groq_basic():
+    """Test básico de Groq con LangChain"""
+    print("=" * 60)
+    print("TEST 1: Conexión básica con Groq")
+    print("=" * 60)
+    
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        print("❌ ERROR: GROQ_API_KEY no configurada")
+        print("\nPara obtener tu API key:")
+        print("1. Ve a https://console.groq.com/keys")
+        print("2. Crea una nueva API key")
+        print("3. Agrégala a tu archivo .env como GROQ_API_KEY=tu-key")
+        return False
+    
+    print(f"✅ API Key encontrada: {api_key[:10]}...")
+    
+    try:
+        # Modelo de Groq (LLaMA 3.1)
+        llm = ChatGroq(
+            model="llama-3.1-8b-instant",
+            groq_api_key=api_key,
+            max_tokens=100,
+            temperature=0.7
+        )
+        print("✅ Cliente ChatGroq creado correctamente")
+        
+        # Test simple
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Eres un asistente útil."),
+            ("user", "Di 'Hola mundo' en JSON: {{'mensaje': 'tu respuesta'}}")
+        ])
+        
+        chain = prompt | llm
+        print("✅ Chain creado con operador |")
+        
+        response = await chain.ainvoke({})
+        print("✅ Respuesta recibida")
+        print(f"Tipo de respuesta: {type(response)}")
+        print(f"Contenido: {response.content}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def test_json_generation():
+    """Test de generación de JSON"""
+    print("\n" + "=" * 60)
+    print("TEST 2: Generación de JSON")
+    print("=" * 60)
+    
+    api_key = os.getenv("GROQ_API_KEY")
+    
+    try:
+        llm = ChatGroq(
+            model="llama-3.1-8b-instant",
+            groq_api_key=api_key,
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Eres un experto en reclutamiento."),
+            ("user", """Genera 3 preguntas para un desarrollador Python.
+
+Retorna ÚNICAMENTE un JSON:
+[
+  {{"pregunta": "texto aquí", "tipo_pregunta": "abierta"}},
+  {{"pregunta": "texto aquí", "tipo_pregunta": "si_no"}},
+  {{"pregunta": "texto aquí", "tipo_pregunta": "escala"}}
+]
+
+No incluyas markdown, solo JSON.""")
+        ])
+        
+        chain = prompt | llm
+        response = await chain.ainvoke({})
+        
+        print("✅ JSON generado:")
+        print(response.content)
+        
+        # Intentar parsear
+        import json
+        try:
+            data = json.loads(response.content.strip())
+            print("✅ JSON válido parseado correctamente")
+            print(f"Número de preguntas: {len(data)}")
+        except:
+            # Intentar limpiar markdown
+            text = response.content.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+                if text.startswith("json"):
+                    text = text[4:]
+            data = json.loads(text.strip())
+            print("✅ JSON parseado después de limpiar markdown")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def test_ia_service():
+    """Test del servicio de IA completo"""
+    print("\n" + "=" * 60)
+    print("TEST 3: Servicio de IA completo con Groq")
+    print("=" * 60)
+    
+    try:
+        from services.ia_service import ia_service
+        
+        print("✅ IAService importado correctamente")
+        
+        # Test generar preguntas
+        print("\nGenerando preguntas...")
+        preguntas = await ia_service.generar_preguntas_vacante(
+            titulo="Desarrollador Python",
+            descripcion="Buscamos desarrollador con experiencia en FastAPI",
+            habilidades_requeridas=["Python", "FastAPI", "PostgreSQL"],
+            experiencia_min=2
+        )
+        
+        print(f"✅ Preguntas generadas: {len(preguntas)}")
+        for i, p in enumerate(preguntas, 1):
+            print(f"  {i}. {p['pregunta'][:50]}... ({p['tipo_pregunta']})")
+        
+        # Test analizar CV
+        print("\nAnalizando CV...")
+        cv_test = """
+        Juan Pérez
+        Desarrollador Python con 3 años de experiencia
+        Habilidades: Python, FastAPI, Django, PostgreSQL, Docker
+        Educación: Ingeniería de Sistemas
+        """
+        
+        analisis = await ia_service.analizar_cv(cv_test)
+        print(f"✅ CV analizado:")
+        print(f"  Habilidades: {analisis.get('habilidades', [])}")
+        print(f"  Experiencia: {analisis.get('experiencia_años', 0)} años")
+        print(f"  Educación: {analisis.get('educacion', 'N/A')}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def test_speed():
+    """Test de velocidad de Groq"""
+    print("\n" + "=" * 60)
+    print("TEST 4: Velocidad de Groq")
+    print("=" * 60)
+    
+    api_key = os.getenv("GROQ_API_KEY")
+    
+    try:
+        import time
+        
+        llm = ChatGroq(
+            model="llama-3.1-8b-instant",
+            groq_api_key=api_key,
+            max_tokens=200,
+            temperature=0.7
+        )
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("user", "Explica qué es FastAPI en 2 líneas.")
+        ])
+        
+        chain = prompt | llm
+        
+        start = time.time()
+        response = await chain.ainvoke({})
+        end = time.time()
+        
+        duration = end - start
+        print(f"✅ Respuesta generada en {duration:.2f} segundos")
+        print(f"Respuesta: {response.content}")
+        
+        if duration < 2:
+            print("🚀 ¡Groq es SÚPER RÁPIDO!")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ ERROR: {e}")
+        return False
+
+
+async def main():
+    """Ejecutar todos los tests"""
+    print("\n🚀 INICIANDO TESTS DE GROQ + LANGCHAIN\n")
+    
+    results = []
+    
+    # Test 1: Básico
+    results.append(await test_groq_basic())
+    
+    # Test 2: JSON
+    results.append(await test_json_generation())
+    
+    # Test 3: Servicio completo
+    results.append(await test_ia_service())
+    
+    # Test 4: Velocidad
+    results.append(await test_speed())
+    
+    # Resumen
+    print("\n" + "=" * 60)
+    print("RESUMEN DE TESTS")
+    print("=" * 60)
+    passed = sum(results)
+    total = len(results)
+    print(f"✅ Tests exitosos: {passed}/{total}")
+    
+    if passed == total:
+        print("\n🎉 ¡TODOS LOS TESTS PASARON!")
+        print("El servicio de IA con Groq está funcionando correctamente.")
+        print("\n💡 Ventajas de Groq:")
+        print("  - Velocidad: 10-20x más rápido que otros LLMs")
+        print("  - Gratis: Límite generoso en el tier gratuito")
+        print("  - Confiable: Infraestructura robusta")
+    else:
+        print("\n⚠️  Algunos tests fallaron. Revisa los errores arriba.")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
