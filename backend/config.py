@@ -13,14 +13,15 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # Supabase
-    # TODO: Configurar tus credenciales de Supabase aquí
-    # Ve a Supabase → Settings → API
     supabase_url: str = os.getenv("SUPABASE_URL", "")
-    supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    supabase_key: str = os.getenv("SUPABASE_KEY", "")  # Cambiado aquí
+    
+    # Mantener compatibilidad con código antiguo
+    @property
+    def supabase_service_key(self):
+        return self.supabase_key
     
     # Groq API (LLaMA 3.1)
-    # TODO: Configurar Groq API key
-    # Ve a https://console.groq.com
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     
     # Email
@@ -36,6 +37,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "allow"  # Permite campos extra
 
 
 settings = Settings()

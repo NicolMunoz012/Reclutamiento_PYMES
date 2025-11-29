@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from routes import empresas, candidatos, vacantes
 
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Sistema de Reclutamiento Inteligente",

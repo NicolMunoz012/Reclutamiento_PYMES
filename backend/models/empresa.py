@@ -32,5 +32,8 @@ class EmpresaDetalle(BaseModel):
     tamaño_empresa: str
     descripcion: Optional[str]
     ciudad: str
-    email: str
-    fecha_registro: datetime
+    sitio_web: Optional[str] = None
+    logo_url: Optional[str] = None
+    direccion: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime

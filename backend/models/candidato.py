@@ -65,5 +65,5 @@ class AplicacionDetalle(BaseModel):
     puntuacion_ia: Optional[int]
     compatibilidad_porcentaje: Optional[int]
     estado: str
-    fecha_aplicacion: datetime
+    fecha_aplicacion: datetime  # Mapeado desde created_at
     aplicacion_id: str

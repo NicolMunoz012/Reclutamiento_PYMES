@@ -66,28 +66,28 @@ async def aplicar_vacante(
             "id": usuario_id,
             "email": email,
             "tipo_usuario": "candidato",
-            "fecha_registro": datetime.utcnow().isoformat()
+            "nombre_completo": nombre_anonimo,
+            "telefono": telefono
+            # created_at y updated_at se generan automáticamente
         }
         
         db.table("usuarios").insert(usuario_record).execute()
         
         # Create candidate record
-        candidato_id = f"CAND_{str(uuid.uuid4())[:8].upper()}"
+        # IMPORTANTE: candidato_id es BIGINT autoincremental, NO se genera manualmente
         candidato_record = {
-            "id": candidato_id,
             "usuario_id": usuario_id,
             "nombre_anonimo": nombre_anonimo,
-            "email": email,
-            "telefono": telefono,
-            "ciudad": ciudad,
-            "años_experiencia": años_experiencia,
-            "habilidades": cv_analisis.get("habilidades", []),
-            "educacion": cv_analisis.get("educacion", ""),
-            "resumen_profesional": cv_analisis.get("resumen", ""),
-            "fecha_registro": datetime.utcnow().isoformat()
+            "email": email,  # ✅ SÍ existe en candidatos
+            "telefono": telefono,  # ✅ SÍ existe en candidatos
+            "años_experiencia": años_experiencia,  # ✅ Con tilde
+            "resumen_profesional": cv_analisis.get("resumen", "")  # ✅ SÍ existe
+            # id se genera automáticamente (BIGINT autoincremental)
+            # created_at se genera automáticamente
         }
         
-        db.table("candidatos").insert(candidato_record).execute()
+        result = db.table("candidatos").insert(candidato_record).execute()
+        candidato_id = result.data[0]["id"]  # Obtener el ID generado (BIGINT)
         
         # Upload CV to storage
         cv_url = await storage_service.upload_cv(
@@ -98,14 +98,18 @@ async def aplicar_vacante(
         
         # Save document record
         documento_id = str(uuid.uuid4())
+        file_size_kb = len(pdf_bytes) // 1024  # Convert bytes to KB
+        
         documento_record = {
             "id": documento_id,
-            "candidato_id": candidato_id,
+            "candidato_id": candidato_id,  # BIGINT (no TEXT)
             "tipo_documento": "cv",
             "nombre_archivo": cv_pdf.filename,
             "url_archivo": cv_url,
-            "texto_extraido": cv_text[:5000],  # Store first 5000 chars
-            "fecha_subida": datetime.utcnow().isoformat()
+            "tamaño_kb": file_size_kb,
+            "mime_type": cv_pdf.content_type or "application/pdf",
+            "texto_extraido": cv_text[:5000]  # Store first 5000 chars
+            # created_at se genera automáticamente con DEFAULT now()
         }
         
         db.table("documentos").insert(documento_record).execute()
@@ -115,9 +119,10 @@ async def aplicar_vacante(
         aplicacion_record = {
             "id": aplicacion_id,
             "vacante_id": vacante_id,
-            "candidato_id": candidato_id,
-            "estado": "aplicado",
-            "fecha_aplicacion": datetime.utcnow().isoformat()
+            "candidato_id": candidato_id,  # BIGINT (no TEXT, no UUID)
+            "estado": "aplicado"
+            # fecha_aplicacion, fecha_ultima_actualizacion y updated_at
+            # se generan automáticamente con DEFAULT now()
         }
         
         db.table("aplicaciones").insert(aplicacion_record).execute()
@@ -174,6 +179,9 @@ async def responder_preguntas(respuestas_data: ResponderPreguntas):
         candidato = db.table("candidatos").select("*").eq("id", candidato_id).execute()
         candidato_data = candidato.data[0]
         
+        # Email está en la tabla candidatos (no necesitamos buscar en usuarios)
+        candidato_email = candidato_data.get("email", "")
+        
         # Get job posting info
         vacante = db.table("vacantes").select("*").eq("id", vacante_id).execute()
         vacante_data = vacante.data[0]
@@ -193,15 +201,21 @@ async def responder_preguntas(respuestas_data: ResponderPreguntas):
             pregunta = db.table("vacante_preguntas").select("pregunta").eq("id", respuesta.pregunta_id).execute()
             pregunta_texto = pregunta.data[0]["pregunta"] if pregunta.data else ""
             
-            respuesta_record = {
-                "id": respuesta_id,
-                "aplicacion_id": respuestas_data.aplicacion_id,
-                "pregunta_id": respuesta.pregunta_id,
-                "respuesta": respuesta.respuesta,
-                "fecha_respuesta": datetime.utcnow().isoformat()
-            }
+            # NOTA: No existe tabla respuestas_candidato
+            # Las respuestas se guardan en la evaluación final
+            # Por ahora solo las acumulamos para la evaluación de IA
             
-            db.table("respuestas_candidato").insert(respuesta_record).execute()
+            # respuesta_record = {
+            #     "id": respuesta_id,
+            #     "aplicacion_id": respuestas_data.aplicacion_id,
+            #     "pregunta_id": respuesta.pregunta_id,
+            #     "respuesta": respuesta.respuesta
+            # }
+            # 
+            # db.table("respuestas_candidato").insert(respuesta_record).execute()
+            
+            # Las respuestas se procesan pero no se guardan individualmente
+            # Se guardarán en la tabla evaluaciones después de la evaluación de IA
             
             respuestas_completas.append({
                 "pregunta": pregunta_texto,
@@ -224,13 +238,28 @@ async def responder_preguntas(respuestas_data: ResponderPreguntas):
             "estado": "en_revision"
         }).eq("id", respuestas_data.aplicacion_id).execute()
         
+        # Save evaluation to evaluaciones table
+        evaluacion_record = {
+            "entrevista_id": None,  # Puede vincularse después si hay entrevista
+            "puntaje_general": evaluacion["puntuacion"],
+            "fortalezas": evaluacion.get("fortalezas", []),
+            "debilidades": evaluacion.get("debilidades", []),
+            "evaluador_nombre": "IA - Groq LLaMA 3.1",
+            "aspectos_positivos": evaluacion.get("fortalezas", []),
+            "aspectos_negativos": evaluacion.get("debilidades", []),
+            "decision_final": "Pendiente de revisión"
+            # created_at se genera automáticamente
+        }
+        
+        db.table("evaluaciones").insert(evaluacion_record).execute()
+        
         # Get company info for email
         empresa = db.table("empresas").select("nombre_empresa").eq("id", vacante_data["empresa_id"]).execute()
         empresa_nombre = empresa.data[0]["nombre_empresa"] if empresa.data else "La empresa"
         
         # Send confirmation email
         email_enviado = await email_service.send_application_confirmation(
-            to_email=candidato_data["email"],
+            to_email=candidato_email,  # Email está en tabla usuarios
             candidato_nombre=candidato_data["nombre_anonimo"],
             vacante_titulo=vacante_data["titulo"],
             empresa_nombre=empresa_nombre,

@@ -4,9 +4,8 @@ Chatbot Service - Conversational AI for candidate interviews using LangChain
 import os
 from typing import List, Dict
 from langchain_groq import ChatGroq
-from langchain_community.memory import ConversationBufferMemory
-from langchain_community.chains import ConversationChain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 from config import settings
 
 
@@ -41,25 +40,22 @@ class ChatbotService:
             temperature=0.8  # More creativity for natural conversation
         )
         
-        # Store conversation memory for each application
-        # Key: aplicacion_id, Value: ConversationBufferMemory
-        self.conversations: Dict[str, ConversationBufferMemory] = {}
+        # Store conversation history for each application
+        # Key: aplicacion_id, Value: List of messages
+        self.conversations: Dict[str, List] = {}
     
-    def _get_or_create_memory(self, aplicacion_id: str) -> ConversationBufferMemory:
+    def _get_or_create_history(self, aplicacion_id: str) -> List:
         """
-        Get or create conversation memory for a specific application.
+        Get or create conversation history for a specific application.
         
         Args:
             aplicacion_id: Unique application identifier
             
         Returns:
-            ConversationBufferMemory instance for this conversation
+            List of messages for this conversation
         """
         if aplicacion_id not in self.conversations:
-            self.conversations[aplicacion_id] = ConversationBufferMemory(
-                return_messages=True,
-                memory_key="chat_history"
-            )
+            self.conversations[aplicacion_id] = []
         return self.conversations[aplicacion_id]
     
     async def iniciar_conversacion(
@@ -84,7 +80,10 @@ class ChatbotService:
         Returns:
             Greeting message with first question
         """
-        memory = self._get_or_create_memory(aplicacion_id)
+        history = self._get_or_create_history(aplicacion_id)
+        
+        # Format questions for the prompt
+        preguntas_formateadas = "\n".join([f"- {p}" for p in preguntas])
         
         # Define conversational prompt template
         prompt = ChatPromptTemplate.from_messages([
@@ -99,7 +98,7 @@ Tu trabajo es:
 4. Agradecer cada respuesta antes de la siguiente pregunta
 
 Tienes estas preguntas para hacer:
-{preguntas}
+{preguntas_formateadas}
 
 IMPORTANTE: 
 - Haz UNA sola pregunta a la vez y espera respuesta
@@ -110,24 +109,21 @@ IMPORTANTE:
             ("user", "{input}")
         ])
         
-        # Create conversation chain with memory
-        chain = ConversationChain(
-            llm=self.llm,
-            memory=memory,
-            prompt=prompt
-        )
+        # Create the chain
+        chain = prompt | self.llm
         
         try:
-            # Format questions for the prompt
-            preguntas_formateadas = "\n".join([f"- {p}" for p in preguntas])
-            
             # Generate greeting and first question
-            response = await chain.apredict(
-                preguntas=preguntas_formateadas,
-                input="Inicia la conversación con un saludo cálido y haz la primera pregunta."
-            )
+            response = await chain.ainvoke({
+                "chat_history": history,
+                "input": "Inicia la conversación con un saludo cálido y haz la primera pregunta."
+            })
             
-            return response
+            # Update history
+            history.append(HumanMessage(content="Inicia la conversación con un saludo cálido y haz la primera pregunta."))
+            history.append(AIMessage(content=response.content))
+            
+            return response.content
             
         except Exception as e:
             print(f"Error starting chatbot conversation: {e}")
@@ -154,17 +150,21 @@ IMPORTANTE:
         Returns:
             Next question from the chatbot
         """
-        memory = self._get_or_create_memory(aplicacion_id)
+        history = self._get_or_create_history(aplicacion_id)
+        
+        # Format remaining questions
+        preguntas_formateadas = "\n".join([f"- {p}" for p in preguntas_restantes]) if preguntas_restantes else "No hay más preguntas"
         
         # Define conversational prompt template
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """Eres un asistente de reclutamiento conversacional.
+            ("system", f"""Eres un asistente de reclutamiento conversacional.
 
 El candidato acaba de responder. Debes:
 1. Agradecer brevemente su respuesta (1 frase corta y natural)
 2. Hacer la siguiente pregunta de forma natural
 
-Preguntas restantes: {preguntas_restantes}
+Preguntas restantes: 
+{preguntas_formateadas}
 
 Si no quedan preguntas, despídete agradeciendo su tiempo y menciona que recibirán noticias pronto.
 
@@ -174,31 +174,32 @@ Mantén un tono profesional pero cálido. No seas repetitivo en los agradecimien
             ("user", "{input}")
         ])
         
-        # Create conversation chain with memory
-        chain = ConversationChain(
-            llm=self.llm,
-            memory=memory,
-            prompt=prompt
-        )
+        # Create the chain
+        chain = prompt | self.llm
         
         try:
-            if preguntas_restantes:
-                # Format remaining questions
-                preguntas_formateadas = "\n".join([f"- {p}" for p in preguntas_restantes])
-                
-                # Generate acknowledgment and next question
-                response = await chain.apredict(
-                    preguntas_restantes=preguntas_formateadas,
-                    input=f"El candidato respondió: '{respuesta_anterior}'. Ahora haz la siguiente pregunta."
-                )
-            else:
-                # No more questions, generate closing
-                response = await chain.apredict(
-                    preguntas_restantes="",
-                    input=f"El candidato respondió: '{respuesta_anterior}'. Ya no hay más preguntas. Despídete de forma profesional."
-                )
+            user_input = f"El candidato respondió: '{respuesta_anterior}'. "
             
-            return response
+            if preguntas_restantes:
+                user_input += "Ahora haz la siguiente pregunta."
+            else:
+                user_input += "Ya no hay más preguntas. Despídete de forma profesional."
+            
+            # Generate acknowledgment and next question
+            response = await chain.ainvoke({
+                "chat_history": history,
+                "input": user_input
+            })
+            
+            # Update history
+            history.append(HumanMessage(content=user_input))
+            history.append(AIMessage(content=response.content))
+            
+            # Limit history to last 20 messages to avoid token limits
+            if len(history) > 20:
+                self.conversations[aplicacion_id] = history[-20:]
+            
+            return response.content
             
         except Exception as e:
             print(f"Error in chatbot next question: {e}")
@@ -221,7 +222,7 @@ Mantén un tono profesional pero cálido. No seas repetitivo en los agradecimien
         Returns:
             Farewell message
         """
-        memory = self._get_or_create_memory(aplicacion_id)
+        history = self._get_or_create_history(aplicacion_id)
         
         # Define closing prompt template
         prompt = ChatPromptTemplate.from_messages([
@@ -243,22 +244,21 @@ Mantén un tono positivo y profesional. Sé breve (2-3 frases).
             ("user", "Genera el mensaje de cierre de la entrevista.")
         ])
         
-        # Create conversation chain with memory
-        chain = ConversationChain(
-            llm=self.llm,
-            memory=memory,
-            prompt=prompt
-        )
+        # Create the chain
+        chain = prompt | self.llm
         
         try:
             # Generate closing message
-            response = await chain.apredict(input="")
+            response = await chain.ainvoke({
+                "chat_history": history,
+                "input": "Genera el mensaje de cierre de la entrevista."
+            })
             
             # Clean up memory after conversation ends
             if aplicacion_id in self.conversations:
                 del self.conversations[aplicacion_id]
             
-            return response
+            return response.content
             
         except Exception as e:
             print(f"Error finalizing chatbot conversation: {e}")

@@ -29,7 +29,7 @@ async def registrar_empresa(empresa: EmpresaRegistro):
             "id": usuario_id,
             "email": empresa.email,
             "tipo_usuario": "empresa",
-            "fecha_registro": datetime.utcnow().isoformat()
+            "nombre_completo": empresa.nombre_empresa  # Usar nombre de empresa como nombre completo
         }
         
         db.table("usuarios").insert(usuario_data).execute()
@@ -44,9 +44,8 @@ async def registrar_empresa(empresa: EmpresaRegistro):
             "industria": empresa.industria,
             "tamaño_empresa": empresa.tamaño_empresa,
             "descripcion": empresa.descripcion,
-            "ciudad": empresa.ciudad,
-            "email": empresa.email,
-            "fecha_registro": datetime.utcnow().isoformat()
+            "ciudad": empresa.ciudad
+            # created_at y updated_at se generan automáticamente con DEFAULT now()
         }
         
         db.table("empresas").insert(empresa_data).execute()
@@ -91,11 +90,11 @@ async def crear_vacante(vacante: VacanteCrear):
             "habilidades_requeridas": vacante.habilidades_requeridas,
             "experiencia_min": vacante.experiencia_min,
             "experiencia_max": vacante.experiencia_max,
-            "salario_min": vacante.salario_min,
-            "salario_max": vacante.salario_max,
+            "salario_min": float(vacante.salario_min) if vacante.salario_min else None,
+            "salario_max": float(vacante.salario_max) if vacante.salario_max else None,
             "ciudad": vacante.ciudad,
-            "estado": "borrador",
-            "fecha_creacion": datetime.utcnow().isoformat()
+            "estado": "borrador"
+            # created_at y updated_at se generan automáticamente con DEFAULT now()
         }
         
         db.table("vacantes").insert(vacante_data).execute()
@@ -117,8 +116,8 @@ async def crear_vacante(vacante: VacanteCrear):
                 "vacante_id": vacante_id,
                 "pregunta": pregunta_data["pregunta"],
                 "tipo_pregunta": pregunta_data["tipo_pregunta"],
-                "aprobada_por_empresa": False,
-                "fecha_creacion": datetime.utcnow().isoformat()
+                "aprobada_por_empresa": False
+                # created_at se genera automáticamente con DEFAULT now()
             }
             
             db.table("vacante_preguntas").insert(pregunta_record).execute()
@@ -185,7 +184,7 @@ async def obtener_aplicaciones(empresa_id: str):
             SELECT 
                 a.id as aplicacion_id,
                 a.estado,
-                a.fecha_aplicacion,
+                a.created_at as fecha_aplicacion,
                 a.puntuacion_ia,
                 a.compatibilidad_porcentaje,
                 c.nombre_anonimo as candidato_nombre,
@@ -222,7 +221,7 @@ async def obtener_aplicaciones(empresa_id: str):
                         "puntuacion_ia": app.get("puntuacion_ia"),
                         "compatibilidad_porcentaje": app.get("compatibilidad_porcentaje"),
                         "estado": app["estado"],
-                        "fecha_aplicacion": app["fecha_aplicacion"]
+                        "fecha_aplicacion": app.get("created_at")
                     })
             
             return {"aplicaciones": aplicaciones_data}
