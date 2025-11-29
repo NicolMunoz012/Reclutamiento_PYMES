@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
 from routes import empresas, candidatos, vacantes
+import os
 
 
 # Initialize FastAPI app
@@ -17,9 +18,19 @@ app = FastAPI(
 )
 
 # Configure CORS
+# En producción, usa settings.cors_origins
+# Para testing, puedes usar ["*"] temporalmente
+allowed_origins = settings.cors_origins
+
+# Si estás en producción y quieres permitir cualquier dominio de Vercel
+if settings.environment == "production":
+    frontend_url = os.getenv("FRONTEND_URL", "")
+    if frontend_url and frontend_url not in allowed_origins:
+        allowed_origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=allowed_origins,  # Usa la lista actualizada
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,7 +49,8 @@ async def root():
         "message": "Sistema de Reclutamiento Inteligente API",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
+        "cors_origins": allowed_origins  # Debug: ver qué origins están permitidos
     }
 
 
@@ -47,7 +59,8 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "environment": settings.environment
+        "environment": settings.environment,
+        "cors_configured": len(allowed_origins)
     }
 
 

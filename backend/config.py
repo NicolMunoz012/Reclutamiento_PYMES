@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     
     # Supabase
     supabase_url: str = os.getenv("SUPABASE_URL", "")
-    supabase_key: str = os.getenv("SUPABASE_KEY", "")  # Cambiado aquí
+    supabase_key: str = os.getenv("SUPABASE_KEY", "")
     
     # Mantener compatibilidad con código antiguo
     @property
@@ -33,11 +33,42 @@ class Settings(BaseSettings):
     
     # General
     environment: str = os.getenv("ENVIRONMENT", "development")
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    
+    # CORS - Configuración dinámica para desarrollo y producción
+    @property
+    def cors_origins(self) -> List[str]:
+        """
+        Retorna lista de origins permitidos.
+        En desarrollo: localhost
+        En producción: agrega la URL del frontend desde variable de entorno
+        """
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:5174",
+        ]
+        
+        # Agregar frontend URL de producción si existe
+        frontend_url = os.getenv("FRONTEND_URL", "")
+        if frontend_url:
+            origins.append(frontend_url)
+            # También permitir sin trailing slash
+            if frontend_url.endswith("/"):
+                origins.append(frontend_url.rstrip("/"))
+            else:
+                origins.append(f"{frontend_url}/")
+        
+        return origins
     
     class Config:
         env_file = ".env"
-        extra = "allow"  # Permite campos extra
+        extra = "allow"
 
 
 settings = Settings()
+
+# Debug: Mostrar configuración al iniciar (útil para troubleshooting)
+print(f"🌍 Environment: {settings.environment}")
+print(f"🔐 CORS Origins: {settings.cors_origins}")
+print(f"✅ Supabase URL: {settings.supabase_url[:30]}..." if settings.supabase_url else "❌ Supabase URL no configurada")
+print(f"✅ Groq API Key: {'Configurada' if settings.groq_api_key else '❌ No configurada'}")
