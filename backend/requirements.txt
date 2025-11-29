@@ -1,6 +1,10 @@
 # FastAPI and Server
 fastapi==0.115.0
-uvicorn[standard]==0.32.0
+uvicorn==0.32.0
+uvloop==0.21.0
+httptools==0.7.1
+websockets==15.0.1
+watchfiles==1.1.1
 
 # Database and Storage
 supabase==2.10.0
