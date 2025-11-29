@@ -6,10 +6,15 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from config import settings
 from typing import Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 
 class EmailService:
     """Service for sending emails"""
+    
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=5)
     
     async def send_application_confirmation(
         self,
@@ -97,16 +102,36 @@ class EmailService:
                 print("SMTP credentials not configured, skipping email")
                 return False
             
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+            # Run SMTP operation in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self.executor,
+                self._send_smtp,
+                settings.smtp_host,
+                settings.smtp_port,
+                settings.smtp_user,
+                settings.smtp_password,
+                msg,
+                to_email
+            )
+            return result
+            
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            return False
+    
+    def _send_smtp(self, host: str, port: int, user: str, password: str, msg: MIMEMultipart, to_email: str) -> bool:
+        """Helper method to send SMTP email synchronously"""
+        try:
+            with smtplib.SMTP(host, port) as server:
                 server.starttls()
-                server.login(settings.smtp_user, settings.smtp_password)
+                server.login(user, password)
                 server.send_message(msg)
             
             print(f"Email sent successfully to {to_email}")
             return True
-            
         except Exception as e:
-            print(f"Error sending email: {e}")
+            print(f"Error in SMTP operation: {e}")
             return False
 
 
