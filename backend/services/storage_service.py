@@ -10,7 +10,7 @@ class StorageService:
     """Service for file storage operations"""
     
     def __init__(self):
-        self.bucket_name = "cvs"
+        self.bucket_name = "convocatoria"
     
     async def upload_cv(
         self,
